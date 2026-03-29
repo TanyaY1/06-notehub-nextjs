@@ -30,9 +30,7 @@ const validationSchema = Yup.object({
     .required("Title is required"),
   content: Yup.string()
     .trim()
-    .min(5, "Content must be at least 5 characters")
-    .max(500, "Content must be at most 500 characters")
-    .required("Content is required"),
+    .max(500, "Content must be at most 500 characters"),
   tag: Yup.string().required("Tag is required"),
 });
 
