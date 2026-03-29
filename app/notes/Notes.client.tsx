@@ -1,41 +1,67 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { fetchNotes } from "@/lib/api";
-import css from "./NotesPage.module.css";
+import { useState, type FormEvent } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createNote } from "@/lib/api";
+import css from "./NoteForm.module.css";
 
 interface Props {
-  initialPage: number;
-  initialSearch: string;
+  onClose: () => void;
 }
 
-export default function NotesClient({ initialPage, initialSearch }: Props) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["notes", initialPage, initialSearch],
-    queryFn: () => fetchNotes({ page: initialPage, search: initialSearch }),
+export default function NoteForm({ onClose }: Props) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [tag, setTag] = useState("");
+
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: createNote,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notes"] });
+      onClose();
+    },
   });
 
-  if (isLoading) {
-    return <p>Loading, please wait...</p>;
-  }
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
 
-  if (error) {
-    return <p>Something went wrong.</p>;
-  }
+    mutation.mutate({
+      title,
+      content,
+      tag,
+    });
+  };
 
   return (
-    <main className={css.container}>
-      <h1 className={css.title}>Notes</h1>
+    <form className={css.form} onSubmit={handleSubmit}>
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Title"
+        required
+      />
 
-      {data && data.notes.length > 0 ? (
-        <ul>
-          {data.notes.map((note) => (
-            <li key={note.id}>{note.title}</li>
-          ))}
-        </ul>
-      ) : (
-        <p>No notes found.</p>
-      )}
-    </main>
+      <textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder="Content"
+        required
+      />
+
+      <input
+        type="text"
+        value={tag}
+        onChange={(e) => setTag(e.target.value)}
+        placeholder="Tag"
+        required
+      />
+
+      <button type="submit" disabled={mutation.isPending}>
+        {mutation.isPending ? "Creating..." : "Create"}
+      </button>
+    </form>
   );
 }

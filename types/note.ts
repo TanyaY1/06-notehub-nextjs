@@ -4,15 +4,5 @@ export interface Note {
   content: string;
   tag: string;
   createdAt: string;
-  updatedAt?: string;
-}
-
-export interface NotesResponse {
-  notes: Note[];
-  totalPages: number;
-}
-
-export interface FetchNotesParams {
-  page?: number;
-  search?: string;
+  updatedAt: string;
 }
