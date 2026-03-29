@@ -1,67 +1,117 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createNote } from "@/lib/api";
-import css from "./NoteForm.module.css";
+import { useRef, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { fetchNotes } from "@/lib/api";
+import SearchBox from "@/components/SearchBox/SearchBox";
+import Pagination from "@/components/Pagination/Pagination";
+import NoteList from "@/components/NoteList/NoteList";
+import Modal from "@/components/Modal/Modal";
+import NoteForm from "@/components/NoteForm/NoteForm";
+import css from "./NotesPage.module.css";
 
 interface Props {
-  onClose: () => void;
+  initialPage: number;
+  initialSearch: string;
 }
 
-export default function NoteForm({ onClose }: Props) {
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [tag, setTag] = useState("");
+export default function NotesClient({
+  initialPage,
+  initialSearch,
+}: Props) {
+  const [page, setPage] = useState(initialPage);
+  const [search, setSearch] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const queryClient = useQueryClient();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const mutation = useMutation({
-    mutationFn: createNote,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notes"] });
-      onClose();
-    },
-  });
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const debounceSearch = (value: string) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
 
-    mutation.mutate({
-      title,
-      content,
-      tag,
-    });
+    timeoutRef.current = setTimeout(() => {
+      setDebouncedSearch(value);
+    }, 300);
   };
 
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["notes", page, debouncedSearch],
+    queryFn: () => fetchNotes({ page, search: debouncedSearch }),
+    placeholderData: keepPreviousData,
+  });
+
+  const updateUrl = (nextPage: number, nextSearch: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (nextPage > 1) {
+      params.set("page", String(nextPage));
+    } else {
+      params.delete("page");
+    }
+
+    if (nextSearch.trim() !== "") {
+      params.set("search", nextSearch);
+    } else {
+      params.delete("search");
+    }
+
+    const queryString = params.toString();
+    router.push(queryString ? `${pathname}?${queryString}` : pathname);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(1);
+    debounceSearch(value);
+    updateUrl(1, value);
+  };
+
+  const handlePageChange = (selectedPage: number) => {
+    setPage(selectedPage);
+    updateUrl(selectedPage, debouncedSearch);
+  };
+
+  const openModal = () => setIsModalOpen(true);
+  const closeModal = () => setIsModalOpen(false);
+
+  if (isLoading) return <p>Loading...</p>;
+  if (error) return <p>Error loading notes</p>;
+
   return (
-    <form className={css.form} onSubmit={handleSubmit}>
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Title"
-        required
-      />
+    <main className={css.app}>
+      <header className={css.toolbar}>
+        <SearchBox value={search} onSearch={handleSearchChange} />
+        <button onClick={openModal}>Create note</button>
+      </header>
 
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="Content"
-        required
-      />
+      {data && data.notes.length > 0 ? (
+        <>
+          <NoteList notes={data.notes} />
 
-      <input
-        type="text"
-        value={tag}
-        onChange={(e) => setTag(e.target.value)}
-        placeholder="Tag"
-        required
-      />
+          {data.totalPages > 1 && (
+            <Pagination
+              pageCount={data.totalPages}
+              currentPage={page}
+              onPageChange={handlePageChange}
+            />
+          )}
+        </>
+      ) : (
+        <p>No notes found.</p>
+      )}
 
-      <button type="submit" disabled={mutation.isPending}>
-        {mutation.isPending ? "Creating..." : "Create"}
-      </button>
-    </form>
+      {isModalOpen && (
+        <Modal onClose={closeModal}>
+          <NoteForm onClose={closeModal} />
+        </Modal>
+      )}
+    </main>
   );
 }

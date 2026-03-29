@@ -1,60 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import type { Note } from "@/types/note";
+import { deleteNote } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createNote } from "@/lib/api";
-import css from "./NoteForm.module.css";
+import Link from "next/link";
+import css from "./NoteList.module.css";
 
 interface Props {
-  onClose: () => void;
+  notes: Note[];
 }
 
-export default function NoteForm({ onClose }: Props) {
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [tag, setTag] = useState("");
-
+export default function NoteList({ notes }: Props) {
   const queryClient = useQueryClient();
 
-  const mutation = useMutation({
-    mutationFn: createNote,
+  const { mutate } = useMutation({
+    mutationFn: deleteNote,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notes"] });
-      onClose();
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    mutation.mutate({
-      title,
-      content,
-      tag,
-    });
-  };
-
   return (
-    <form className={css.form} onSubmit={handleSubmit}>
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Title"
-      />
+    <ul className={css.list}>
+      {notes.map((note) => (
+        <li key={note.id} className={css.item}>
+          <h2 className={css.title}>{note.title}</h2>
+          <p className={css.content}>{note.content}</p>
+          <p className={css.tag}>{note.tag}</p>
+          <p className={css.date}>{note.createdAt}</p>
 
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="Content"
-      />
-
-      <input
-        value={tag}
-        onChange={(e) => setTag(e.target.value)}
-        placeholder="Tag"
-      />
-
-      <button type="submit">Create</button>
-    </form>
+          <div className={css.actions}>
+            <Link href={`/notes/${note.id}`}>View details</Link>
+            <button type="button" onClick={() => mutate(note.id)}>
+              Delete
+            </button>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
